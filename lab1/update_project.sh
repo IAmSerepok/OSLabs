@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PROJECT_DIR="./lab1/"
+PROJECT_DIR="./"
 
 echo "Стягиваем изменения..."
 git checkout -- .
