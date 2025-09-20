@@ -11,10 +11,10 @@ git checkout main
 git pull origin main
 
 cd "%PROJECT_DIR%"
-if not exist output (
-    mkdir output
+if not exist build (
+    mkdir build
 )
-cd output
+cd build
 
 cmake ..
 
