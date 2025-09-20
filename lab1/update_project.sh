@@ -1,8 +1,9 @@
 #!/bin/bash
 
-PROJECT_DIR="./"
+PROJECT_DIR="./lab1"
 
 echo "Стягиваем изменения..."
+cd ..
 git checkout -- .
 git clean -fd
 git fetch origin
