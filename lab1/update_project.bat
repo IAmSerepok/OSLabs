@@ -16,7 +16,7 @@ if not exist build (
 )
 cd build
 
-cmake ..
+cmake .. -G "MinGW Makefiles"
 
 cmake --build .
 
