@@ -1,10 +1,16 @@
 #!/bin/bash
 
+PROJECT_DIR="./lab1/"
+
 echo "Стягиваем изменения..."
+git checkout -- .
+git clean -fd
+git fetch origin
+git checkout main
 git pull origin main
 
 echo "Собираем проект..."
-cd lab1
+cd "$PROJECT_DIR"
 mkdir -p output
 cd output
 cmake ..
