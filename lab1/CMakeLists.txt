@@ -3,4 +3,4 @@ project(HelloWorld)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(HelloWorld lab1/main.cpp)
+add_executable(HelloWorld main.cpp)
