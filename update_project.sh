@@ -10,7 +10,7 @@ git checkout main
 git pull origin main
 
 echo "Собираем проект..."
-# cd "$PROJECT_DIR"
+cd "$PROJECT_DIR"
 mkdir -p output
 cd output
 cmake ..
