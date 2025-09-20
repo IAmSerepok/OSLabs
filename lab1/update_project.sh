@@ -12,8 +12,8 @@ git pull origin main
 
 echo "Собираем проект..."
 cd "$PROJECT_DIR"
-mkdir -p output
-cd output
+mkdir -p build
+cd build
 cmake ..
 cmake --build .
 
