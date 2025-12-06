@@ -105,6 +105,11 @@ private:  // Для хранения айдишек процессов
                 
                 execvp(program.c_str(), argv.data()); // Меняем текущий дочерний процесс на нужную нам программу
 
+                // Пишем в pipe, что execvp не удался
+                char error = '0';
+                write(pipefd[1], &error, 1);
+                close(pipefd[1]);
+
                 exit(EXIT_FAILURE);
 
             } else if (pid > 0) {
