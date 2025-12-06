@@ -10,6 +10,7 @@
 #   include <sys/types.h>
 #   include <cstring>
 #   include <errno.h>
+#   include <sys/stat.h>
 #endif
 
 
@@ -83,18 +84,23 @@ private:  // Для хранения айдишек процессов
         }
     #else
         static pid_t launchUnix(const std::string& program, const std::vector<std::string>& args) {
-            // Создаем pipe для общения с дочерним процессом
-            int pipefd[2];
-            if (pipe(pipefd) == -1) {
+            struct stat fileStat;
+            if (stat(program.c_str(), &fileStat) == -1) {
                 return -1;
             }
             
-            pid_t pid = fork();
+            if (!S_ISREG(fileStat.st_mode)) {
+                return -1;
+            }
+            
+            if (access(program.c_str(), X_OK) == -1) {
+                return -1;
+            }
+
+            pid_t pid = fork(); // pid=0: мы в дочернем, pid>0: мы в родителе, pid<0: ошибка
             
             if (pid == 0) {
                 // Дочерний процесс
-                close(pipefd[0]); // Закрываем read end
-                
                 std::vector<char*> argv;
                 argv.push_back(const_cast<char*>(program.c_str()));
                 
@@ -103,50 +109,14 @@ private:  // Для хранения айдишек процессов
                 }
                 argv.push_back(nullptr);
                 
-                execvp(program.c_str(), argv.data());
+                execvp(program.c_str(), argv.data()); // Меняем текущий дочерний процесс на нужную нам программу
                 
-                // Если дошли сюда, значит execvp не удался
-                char err = '1'; // Просто отправляем любой символ
-                write(pipefd[1], &err, 1);
-                close(pipefd[1]);
-                _exit(EXIT_FAILURE); // Используем _exit вместо exit
+                std::cerr << strerror(errno) << std::endl; // Сюда дойти не должно
+                exit(EXIT_FAILURE);
 
             } else if (pid > 0) {
-                // Родительский процесс
-                close(pipefd[1]); // Закрываем write end
-                
-                // Проверяем, не произошла ли ошибка в дочернем процессе
-                char child_error = 0;
-                fd_set readfds;
-                struct timeval timeout;
-                
-                FD_ZERO(&readfds);
-                FD_SET(pipefd[0], &readfds);
-                
-                timeout.tv_sec = 0; // Немедленная проверка
-                timeout.tv_usec = 10000; // 10ms (можно увеличить до 100000 для 100ms)
-                
-                int ready = select(pipefd[0] + 1, &readfds, NULL, NULL, &timeout);
-                
-                if (ready > 0) {
-                    // Дочерний процесс написал в pipe - значит execvp не удался
-                    read(pipefd[0], &child_error, 1);
-                }
-                close(pipefd[0]);
-                
-                if (child_error != 0) {
-                    // Ошибка в дочернем процессе - убиваем его и возвращаем ошибку
-                    kill(pid, SIGKILL);
-                    int status;
-                    waitpid(pid, &status, 0);
-                    return -1;
-                }
-                
                 return pid;
             } else {
-                // Ошибка fork
-                close(pipefd[0]);
-                close(pipefd[1]);
                 return -1;
             }
         }
