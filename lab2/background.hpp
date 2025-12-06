@@ -139,7 +139,10 @@ private:  // Для хранения айдишек процессов
                 }
                 
                 close(pipefd[0]);
+                return pid; 
             } else {
+                close(pipefd[0]);
+                close(pipefd[1]);
                 return -1;
             }
         }
