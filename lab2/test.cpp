@@ -71,21 +71,6 @@ void test4(int n) {
     std::cout << "\n";
 }
 
-void test5() {
-    std::cout << "=== Test 5 ===" << "\n";
-    
-    bool success = BackgroundLauncher::launch("suschtsch", {"arg1", "arg2"});
-    
-    if (success) {
-        std::cout << "Ok" << "\n";
-    } else {
-        std::cout << "Error" << "\n";
-    }
-    
-    int exitCode = BackgroundLauncher::launchAndWait("schtsch");
-    std::cout << "Exit code: " << exitCode << "\n\n";
-}
-
 
 int main() {
     #ifdef _WIN32
@@ -99,7 +84,6 @@ int main() {
     test2();
     test3(3);
     test4(3);
-    test5();
     
     return 0;
 }

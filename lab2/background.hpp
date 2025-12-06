@@ -10,7 +10,6 @@
 #   include <sys/types.h>
 #   include <cstring>
 #   include <errno.h>
-#   include <sys/stat.h>
 #endif
 
 
@@ -84,19 +83,6 @@ private:  // Для хранения айдишек процессов
         }
     #else
         static pid_t launchUnix(const std::string& program, const std::vector<std::string>& args) {
-            struct stat fileStat;
-            if (stat(program.c_str(), &fileStat) == -1) {
-                return -1;
-            }
-            
-            if (!S_ISREG(fileStat.st_mode)) {
-                return -1;
-            }
-            
-            if (access(program.c_str(), X_OK) == -1) {
-                return -1;
-            }
-
             pid_t pid = fork(); // pid=0: мы в дочернем, pid>0: мы в родителе, pid<0: ошибка
             
             if (pid == 0) {
