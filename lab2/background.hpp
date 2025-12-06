@@ -84,17 +84,18 @@ private:  // Для хранения айдишек процессов
         }
     #else
         static pid_t launchUnix(const std::string& program, const std::vector<std::string>& args) {
-            pid_t pid = fork(); // pid=0: мы в дочернем, pid>0: мы в родителе, pid<0: ошибка
-
+            // Создаем pipe для синхронизации
             int pipefd[2];
             if (pipe(pipefd) == -1) {
                 return -1;
             }
             
+            pid_t pid = fork(); // pid=0: мы в дочернем, pid>0: мы в родителе, pid<0: ошибка
+            
             if (pid == 0) {
                 // Дочерний процесс
-                close(pipefd[0]);
-
+                close(pipefd[0]); // Закрываем read end
+                
                 std::vector<char*> argv;
                 argv.push_back(const_cast<char*>(program.c_str()));
                 
@@ -104,28 +105,32 @@ private:  // Для хранения айдишек процессов
                 argv.push_back(nullptr);
                 
                 execvp(program.c_str(), argv.data()); // Меняем текущий дочерний процесс на нужную нам программу
-
-                // Пишем в pipe, что execvp не удался
-                char error = '0';
+                
+                // Если дошли сюда, execvp не удался
+                // Пишем 'E' в pipe и закрываем его
+                char error = 'E';
                 write(pipefd[1], &error, 1);
                 close(pipefd[1]);
-
                 exit(EXIT_FAILURE);
 
             } else if (pid > 0) {
-                int status;
-                pid_t result = waitpid(pid, &status, WNOHANG); // Неблокирующий вызов
+                // Родительский процесс
+                close(pipefd[1]); // Закрываем write end
                 
-                if (result == pid) {
-                    // Дочерний процесс уже завершился (скорее всего execvp не удался)
-                    return -1;
-                } else if (result == 0) {
-                    // Дочерний процесс еще работает - значит execvp успешен
-                    return pid;
-                } else {
-                    // Ошибка
+                // Ждем сообщения от дочернего процесса
+                char buf;
+                int bytes_read = read(pipefd[0], &buf, 1);
+                close(pipefd[0]);
+                
+                if (bytes_read > 0) {
+                    // Получили сообщение - значит execvp не удался
+                    int status;
+                    waitpid(pid, &status, 0); // Убираем зомби
                     return -1;
                 }
+                
+                // read вернул 0 (pipe закрыт) - значит execvp успешен
+                return pid;
             } else {
                 close(pipefd[0]);
                 close(pipefd[1]);
