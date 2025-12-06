@@ -10,6 +10,7 @@
 #   include <sys/types.h>
 #   include <cstring>
 #   include <errno.h>
+#   include <fcntl.h>
 #endif
 
 
@@ -86,13 +87,11 @@ private:  // Для хранения айдишек процессов
             pid_t pid = fork(); // pid=0: мы в дочернем, pid>0: мы в родителе, pid<0: ошибка
             
             if (pid == 0) {
-                if (suppressOutput) {
-                    // Перенаправляем вывод ошибок
-                    int devNull = open("/dev/null", O_WRONLY);
-                    if (devNull >= 0) {
-                        dup2(devNull, STDERR_FILENO);
-                        close(devNull);
-                    }
+                // Перенаправляем вывод ошибок
+                int devNull = open("/dev/null", O_WRONLY);
+                if (devNull >= 0) {
+                    dup2(devNull, STDERR_FILENO);
+                    close(devNull);
                 }
                 
                 std::vector<char*> argv;
