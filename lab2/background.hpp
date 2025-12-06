@@ -10,6 +10,7 @@
 #   include <sys/types.h>
 #   include <cstring>
 #   include <errno.h>
+#   include <fcntl.h>
 #endif
 
 
@@ -84,9 +85,16 @@ private:  // Для хранения айдишек процессов
     #else
         static pid_t launchUnix(const std::string& program, const std::vector<std::string>& args) {
             pid_t pid = fork(); // pid=0: мы в дочернем, pid>0: мы в родителе, pid<0: ошибка
+
+            int pipefd[2];
+            if (pipe(pipefd) == -1) {
+                return -1;
+            }
             
             if (pid == 0) {
                 // Дочерний процесс
+                close(pipefd[0]);
+
                 std::vector<char*> argv;
                 argv.push_back(const_cast<char*>(program.c_str()));
                 
@@ -96,8 +104,8 @@ private:  // Для хранения айдишек процессов
                 argv.push_back(nullptr);
                 
                 execvp(program.c_str(), argv.data()); // Меняем текущий дочерний процесс на нужную нам программу
-                
-                exit(-1);
+
+                exit(EXIT_FAILURE);
 
             } else if (pid > 0) {
                 return pid;
