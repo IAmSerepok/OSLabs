@@ -113,7 +113,32 @@ private:  // Для хранения айдишек процессов
                 exit(EXIT_FAILURE);
 
             } else if (pid > 0) {
-                return pid;
+                close(pipefd[1]); // Закрываем write end
+                    
+                // Ждем немного и проверяем pipe
+                char buf;
+                fd_set readfds;
+                struct timeval tv;
+                
+                FD_ZERO(&readfds);
+                FD_SET(pipefd[0], &readfds);
+                tv.tv_sec = 0;
+                tv.tv_usec = 100000; // 100ms
+                
+                int ret = select(pipefd[0] + 1, &readfds, NULL, NULL, &tv);
+                
+                if (ret > 0 && FD_ISSET(pipefd[0], &readfds)) {
+                    // execvp не удался
+                    read(pipefd[0], &buf, 1);
+                    close(pipefd[0]);
+                    
+                    // Ждем завершения дочернего процесса
+                    int status;
+                    waitpid(pid, &status, 0);
+                    return -1; // Возвращаем ошибку
+                }
+                
+                close(pipefd[0]);
             } else {
                 return -1;
             }
