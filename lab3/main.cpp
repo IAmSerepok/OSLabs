@@ -288,7 +288,7 @@ public:
 
     // Запуск копии на х2
     void runCopy2() {
-        writeToLog("COPY x2 finished");
+        writeToLog("COPY x2 started");
         if (sharedMemory.IsValid()) {
             sharedMemory.Lock();
             SharedData* data = sharedMemory.Data();
