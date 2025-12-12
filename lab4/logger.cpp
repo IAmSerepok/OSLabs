@@ -48,28 +48,56 @@ private:
     
     bool parse_json(const string& json_str, TemperatureData& data) {
         size_t temp_pos = json_str.find("\"temperature\":");
+        size_t checksum_pos = json_str.find("\"checksum\":");
         size_t time_pos = json_str.find("\"timestamp\":");
         
-        if (temp_pos == string::npos || time_pos == string::npos) {
+        if (temp_pos == string::npos || checksum_pos == string::npos || time_pos == string::npos) {
             return false;
         }
         
+        // Извлекаем температуру
         temp_pos += 14; // Длина "\"temperature\":"
         size_t temp_end = json_str.find(',', temp_pos);
         if (temp_end == string::npos) return false;
         
         string temp_str = json_str.substr(temp_pos, temp_end - temp_pos);
+        float temperature;
         try {
-            data.temperature = stof(temp_str);
+            temperature = stof(temp_str);
         } catch (...) {
             return false;
         }
         
+        // Извлекаем контрольную сумму
+        checksum_pos += 11; // Длина "\"checksum\":"
+        size_t checksum_end = json_str.find('}', checksum_pos);
+        if (checksum_end == string::npos) {
+            checksum_end = json_str.find(',', checksum_pos);
+        }
+        if (checksum_end == string::npos) return false;
+        
+        string checksum_str = json_str.substr(checksum_pos, checksum_end - checksum_pos);
+        float checksum;
+        try {
+            checksum = stof(checksum_str);
+        } catch (...) {
+            return false;
+        }
+        
+        // Проверяем контрольную сумму
+        const float EPSILON = 0.01f;
+        if (fabs(temperature - checksum) > EPSILON) {
+            cout << "Checksum error\n";
+            return false;
+        }
+        
+        // Извлекаем timestamp
         time_pos += 13; // Длина "\"timestamp\":"
         size_t time_end = json_str.find('"', time_pos + 1);
         if (time_end == string::npos) return false;
         
         data.timestamp = json_str.substr(time_pos + 1, time_end - time_pos - 1);
+        data.temperature = temperature;
         
         return true;
     }
@@ -343,7 +371,7 @@ void read_from_port(SerialPort& port, TemperatureLogger& logger) {
                 if (logger.parse_and_add_data(json_str)) {
                     cout << "Received data\n";
                 } else {
-                    cout << "Failed\n";
+                    cout << "error\n";
                 }
             }
         } else if (result != SerialPort::RE_OK) {
@@ -382,8 +410,6 @@ int main(int argc, char* argv[]) {
             cout << "Failed to open port\n";
             return 1;
         }
-        
-        cout << "Port opened successfully\n";
         
         read_from_port(port, logger);
         
