@@ -14,13 +14,12 @@
 #include <cmath>
 #include <mutex>
 #include <deque>
-#include <filesystem>
+#include <sys/stat.h> 
 
 #include "my_serial.hpp"
 
 using namespace cplib;
 using namespace std;
-namespace fs = std::filesystem;
 
 atomic<bool> g_running(true);
 
@@ -119,6 +118,12 @@ private:
         data.temperature = temperature;
         
         return true;
+    }
+    
+    // Проверка существования файла
+    bool file_exists(const string& filename) {
+        struct stat buffer;
+        return (stat(filename.c_str(), &buffer) == 0);
     }
     
     // Запись всех замеров
@@ -279,9 +284,9 @@ private:
         needs_daily_cleanup = false;
     }
     
-    // если логер упадет то новый запуск подгузит данные из файла
+    // если логер упадет то новый запуск подгрузит данные из файла
     size_t count_file_lines(const string& filename) {
-        if (!fs::exists(filename)) return 0;
+        if (!file_exists(filename)) return 0;
         
         ifstream in_file(filename);
         if (!in_file.is_open()) return 0;
@@ -319,9 +324,7 @@ private:
         
         // Очищаем буфер для расчета
         hourly_calc_buffer.clear();
-        
-        cout << "Hourly average calculated: " << avg_temp << "°C\n";
-        
+
         // Периодически проверяем необходимость очистки
         static size_t cleanup_counter = 0;
         if (++cleanup_counter >= CLEANUP_CHECK_INTERVAL) {
