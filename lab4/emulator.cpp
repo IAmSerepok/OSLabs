@@ -25,13 +25,16 @@ void signal_handler(int signal) {
 }
 
 // Глобальная переменная для последней температуры
-atomic<float> last_temp(20.0f);
+float last_temp = 20.0f;
 
 // Генератор случайных значений температуры
 float generate_temperature() {
-    float change = (rand() % 100 - 50) / 50.0f; // Небольшие изменения
+    float change = (rand() % 100 - 50) / 100.0f;
     last_temp += change;
     
+    if (last_temp < -10.0f) last_temp = -10.0f;
+    if (last_temp > 30.0f) last_temp = 30.0f;
+
     return last_temp;
 }
 
@@ -46,20 +49,19 @@ string get_current_time() {
     return ss.str();
 }
 
+// Функция эмуляции датчика
 void emulate_temperature_sensor(SerialPort& port, int interval_ms) {   
-    srand(static_cast<unsigned int>(time(nullptr)));
-    
     while (g_running) {
         float temperature = generate_temperature();
         string timestamp = get_current_time();
         
-        // Отправляем температуру дважды для гаранта корректности
+        // Формируем сообщение в формате JSON с контрольной суммой
         stringstream message;
         message << fixed << setprecision(2);
         message << "{";
         message << "\"temperature\": " << temperature << ", ";
         message << "\"timestamp\": \"" << timestamp << "\", ";
-        message << "\"checksum\": " << temperature; // типо контрольная сумма
+        message << "\"checksum\": " << temperature; // допустим это контрольная сумма
         message << "}\r\n"; 
         
         string message_str = message.str();
@@ -78,7 +80,7 @@ void emulate_temperature_sensor(SerialPort& port, int interval_ms) {
 }
 
 int main(int argc, char* argv[]) {
-    // инициализация ГСПЧ
+    // гспч
     srand(static_cast<unsigned int>(time(nullptr)));
     
     // включаем обработку сигналов
@@ -102,18 +104,18 @@ int main(int argc, char* argv[]) {
         int result = port.Open(port_name, params);
         
         if (result != SerialPort::RE_OK) {
-            cout << "Error while opening port\n"; 
+            cout << "Error while opening\n"; 
             return 1;
         }
         
         // Запускаем эмуляцию датчика
-        int interval_ms = 1000;
+        int interval_ms = 1000; 
         emulate_temperature_sensor(port, interval_ms);
         
         port.Close();
 
     } catch(...) {
-        cout << "Error while opening port\n"; 
+        cout << "Error while opening\n"; 
         return 1;
     }
     

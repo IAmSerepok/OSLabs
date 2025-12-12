@@ -13,11 +13,14 @@
 #include <csignal>
 #include <cmath>
 #include <mutex>
+#include <deque>
+#include <filesystem>
 
 #include "my_serial.hpp"
 
 using namespace cplib;
 using namespace std;
+namespace fs = std::filesystem;
 
 atomic<bool> g_running(true);
 
@@ -38,8 +41,24 @@ private:
     string hourly_log_file;
     string daily_log_file;
     
-    vector<TemperatureData> hourly_data;
-    map<string, vector<float>> daily_data;
+    // Ограничение на длину файла
+    static const size_t MAX_RAW_RECORDS = 24 * 60 * 60; 
+    static const size_t MAX_HOURLY_RECORDS = 30 * 24; 
+    static const size_t MAX_DAILY_RECORDS = 365; 
+    
+    // Счетчики записей в файлах
+    size_t raw_records_count = 0;
+    size_t hourly_records_count = 0;
+    size_t daily_records_count = 0;
+    
+    // Флаги для периодической очистки
+    atomic<bool> needs_raw_cleanup{false};
+    atomic<bool> needs_hourly_cleanup{false};
+    atomic<bool> needs_daily_cleanup{false};
+    
+    // Будем срезать старые данные перезаписывая файл не каждый раз, а раз в несколько итераций
+    static const size_t CLEANUP_CHECK_INTERVAL = 100;
+    
     time_t last_hour_check;
     time_t last_day_check;
     
@@ -102,140 +121,215 @@ private:
         return true;
     }
     
-    void write_raw_log(const TemperatureData& data) {
+    // Запись всех замеров
+    void append_raw_log(const TemperatureData& data) {
         lock_guard<mutex> lock(file_mutex);
         
-        // Читаем старые записи и оставляем только последние 24 часа
-        vector<string> valid_entries;
-        ifstream in_file(raw_log_file);
-        string line;
-        
-        if (in_file.is_open()) {
-            while (getline(in_file, line)) {
-                if (!line.empty() && is_entry_within_24h(line)) {
-                    valid_entries.push_back(line);
-                }
-            }
-            in_file.close();
-        }
-        
-        // Добавляем новую запись
-        valid_entries.push_back(data.timestamp + "," + to_string(data.temperature));
-        
-        // Сохраняем обратно
-        ofstream out_file(raw_log_file);
+        // Дозаписываем в конец файла
+        ofstream out_file(raw_log_file, ios::app);
         if (out_file.is_open()) {
-            for (const auto& entry : valid_entries) {
-                out_file << entry << endl;
+            out_file << data.timestamp << "," 
+                    << fixed << setprecision(2) << data.temperature << endl;
+            raw_records_count++;
+            
+            // Проверяем, не нужно ли очистить старые записи
+            if (raw_records_count > MAX_RAW_RECORDS) {
+                needs_raw_cleanup = true;
             }
-            out_file.close();
         }
     }
     
-    bool is_entry_within_24h(const string& entry) {
-        size_t comma_pos = entry.find(',');
-        if (comma_pos == string::npos) return false;
+    // Периодическая очистка старых записей
+    void cleanup_raw_log() {
+        lock_guard<mutex> lock(file_mutex);
         
-        string timestamp_str = entry.substr(0, comma_pos);
-        
-        tm tm_time = {};
-        istringstream ss(timestamp_str);
-        ss >> get_time(&tm_time, "%Y-%m-%d %H:%M:%S");
-        if (ss.fail()) {
-            size_t dot_pos = timestamp_str.find('.');
-            if (dot_pos != string::npos) {
-                timestamp_str = timestamp_str.substr(0, dot_pos);
-                ss.clear();
-                ss.str(timestamp_str);
-                ss >> get_time(&tm_time, "%Y-%m-%d %H:%M:%S");
-            }
-            if (ss.fail()) return false;
+        if (!needs_raw_cleanup || raw_records_count <= MAX_RAW_RECORDS) {
+            return;
         }
         
-        time_t entry_time = mktime(&tm_time);
-        time_t current_time = time(nullptr);
+        // Читаем все записи из файла
+        ifstream in_file(raw_log_file);
+        if (!in_file.is_open()) return;
         
-        return difftime(current_time, entry_time) <= 24 * 60 * 60; // 24 часа
+        vector<string> records;
+        string line;
+        while (getline(in_file, line)) {
+            if (!line.empty()) {
+                records.push_back(line);
+            }
+        }
+        in_file.close();
+        
+        // Если записей больше лимита, оставляем только последние MAX_RAW_RECORDS
+        if (records.size() > MAX_RAW_RECORDS) {
+            size_t start_index = records.size() - MAX_RAW_RECORDS;
+            
+            // Перезаписываем файл только с последними записями
+            ofstream out_file(raw_log_file);
+            if (out_file.is_open()) {
+                for (size_t i = start_index; i < records.size(); ++i) {
+                    out_file << records[i] << endl;
+                }
+                raw_records_count = records.size() - start_index;
+            }
+        }
+        
+        needs_raw_cleanup = false;
     }
+    
+    // Дозапись часовых средних
+    void append_hourly_average(const string& timestamp, float avg_temp) {
+        lock_guard<mutex> lock(file_mutex);
+        
+        ofstream out_file(hourly_log_file, ios::app);
+        if (out_file.is_open()) {
+            out_file << timestamp << "," 
+                    << fixed << setprecision(2) << avg_temp << endl;
+            hourly_records_count++;
+            
+            if (hourly_records_count > MAX_HOURLY_RECORDS) {
+                needs_hourly_cleanup = true;
+            }
+        }
+    }
+    
+    // Очистка старых часовых записей
+    void cleanup_hourly_log() {
+        lock_guard<mutex> lock(file_mutex);
+        
+        if (!needs_hourly_cleanup || hourly_records_count <= MAX_HOURLY_RECORDS) {
+            return;
+        }
+        
+        ifstream in_file(hourly_log_file);
+        if (!in_file.is_open()) return;
+        
+        vector<string> records;
+        string line;
+        while (getline(in_file, line)) {
+            if (!line.empty()) {
+                records.push_back(line);
+            }
+        }
+        in_file.close();
+        
+        if (records.size() > MAX_HOURLY_RECORDS) {
+            size_t start_index = records.size() - MAX_HOURLY_RECORDS;
+            
+            ofstream out_file(hourly_log_file);
+            if (out_file.is_open()) {
+                for (size_t i = start_index; i < records.size(); ++i) {
+                    out_file << records[i] << endl;
+                }
+                hourly_records_count = records.size() - start_index;
+            }
+        }
+        
+        needs_hourly_cleanup = false;
+    }
+    
+    // Дозапись дневных средних
+    void append_daily_average(const string& date, float avg_temp) {
+        lock_guard<mutex> lock(file_mutex);
+        
+        ofstream out_file(daily_log_file, ios::app);
+        if (out_file.is_open()) {
+            out_file << date << "," 
+                    << fixed << setprecision(2) << avg_temp << endl;
+            daily_records_count++;
+            
+            if (daily_records_count > MAX_DAILY_RECORDS) {
+                needs_daily_cleanup = true;
+            }
+        }
+    }
+    
+    // Очистка старых дневных записей
+    void cleanup_daily_log() {
+        lock_guard<mutex> lock(file_mutex);
+        
+        if (!needs_daily_cleanup || daily_records_count <= MAX_DAILY_RECORDS) {
+            return;
+        }
+        
+        ifstream in_file(daily_log_file);
+        if (!in_file.is_open()) return;
+        
+        vector<string> records;
+        string line;
+        while (getline(in_file, line)) {
+            if (!line.empty()) {
+                records.push_back(line);
+            }
+        }
+        in_file.close();
+        
+        if (records.size() > MAX_DAILY_RECORDS) {
+            size_t start_index = records.size() - MAX_DAILY_RECORDS;
+            
+            ofstream out_file(daily_log_file);
+            if (out_file.is_open()) {
+                for (size_t i = start_index; i < records.size(); ++i) {
+                    out_file << records[i] << endl;
+                }
+                daily_records_count = records.size() - start_index;
+            }
+        }
+        
+        needs_daily_cleanup = false;
+    }
+    
+    // если логер упадет то новый запуск подгузит данные из файла
+    size_t count_file_lines(const string& filename) {
+        if (!fs::exists(filename)) return 0;
+        
+        ifstream in_file(filename);
+        if (!in_file.is_open()) return 0;
+        
+        size_t count = 0;
+        string line;
+        while (getline(in_file, line)) {
+            if (!line.empty()) count++;
+        }
+        
+        return count;
+    }
+    
+    // Данные для расчета средних
+    vector<TemperatureData> hourly_calc_buffer;
+    map<string, vector<float>> daily_calc_buffer;
     
     void process_hourly_average() {
         lock_guard<mutex> lock(data_mutex);
         
-        if (hourly_data.empty()) return;
+        if (hourly_calc_buffer.empty()) return;
         
         // Вычисляем среднюю температуру за час
         float sum = 0;
-        for (const auto& data : hourly_data) {
+        for (const auto& data : hourly_calc_buffer) {
             sum += data.temperature;
         }
-        float avg_temp = sum / hourly_data.size();
+        float avg_temp = sum / hourly_calc_buffer.size();
         
         // Получаем timestamp первого измерения в часе
-        string hour_timestamp = hourly_data.front().timestamp.substr(0, 13) + ":00:00.000";
+        string hour_timestamp = hourly_calc_buffer.front().timestamp.substr(0, 13) + ":00:00.000";
         
-        // Записываем в файл
-        lock_guard<mutex> file_lock(file_mutex);
+        // Сохраняем результат
+        append_hourly_average(hour_timestamp, avg_temp);
         
-        // Читаем старые записи и оставляем только последний месяц
-        vector<string> valid_entries;
-        ifstream in_file(hourly_log_file);
-        string line;
+        // Очищаем буфер для расчета
+        hourly_calc_buffer.clear();
         
-        if (in_file.is_open()) {
-            while (getline(in_file, line)) {
-                if (!line.empty() && is_entry_within_month(line)) {
-                    valid_entries.push_back(line);
-                }
+        cout << "Hourly average calculated: " << avg_temp << "°C\n";
+        
+        // Периодически проверяем необходимость очистки
+        static size_t cleanup_counter = 0;
+        if (++cleanup_counter >= CLEANUP_CHECK_INTERVAL) {
+            cleanup_counter = 0;
+            if (needs_hourly_cleanup) {
+                cleanup_hourly_log();
             }
-            in_file.close();
         }
-        
-        // Добавляем новую запись
-        stringstream ss;
-        ss << fixed << setprecision(2);
-        ss << avg_temp;
-        valid_entries.push_back(hour_timestamp + "," + ss.str());
-        
-        // Сохраняем обратно
-        ofstream out_file(hourly_log_file);
-        if (out_file.is_open()) {
-            for (const auto& entry : valid_entries) {
-                out_file << entry << endl;
-            }
-            out_file.close();
-        }
-        
-        // Очищаем данные за час
-        hourly_data.clear();
-        
-        cout << "Hourly average calculated\n";
-    }
-    
-    bool is_entry_within_month(const string& entry) {
-        size_t comma_pos = entry.find(',');
-        if (comma_pos == string::npos) return false;
-        
-        string timestamp_str = entry.substr(0, comma_pos);
-        
-        // Парсим timestamp
-        tm tm_time = {};
-        istringstream ss(timestamp_str);
-        ss >> get_time(&tm_time, "%Y-%m-%d %H:%M:%S");
-        if (ss.fail()) {
-            size_t dot_pos = timestamp_str.find('.');
-            if (dot_pos != string::npos) {
-                timestamp_str = timestamp_str.substr(0, dot_pos);
-                ss.clear();
-                ss.str(timestamp_str);
-                ss >> get_time(&tm_time, "%Y-%m-%d %H:%M:%S");
-            }
-            if (ss.fail()) return false;
-        }
-        
-        time_t entry_time = mktime(&tm_time);
-        time_t current_time = time(nullptr);
-        
-        return difftime(current_time, entry_time) <= 30 * 24 * 60 * 60; // ну в среднем месяц
     }
     
     void process_daily_average() {
@@ -248,14 +342,13 @@ private:
         mktime(tm_now);
         
         string date_key;
-        {
-            ostringstream oss;
-            oss << put_time(tm_now, "%Y-%m-%d");
-            date_key = oss.str();
-        }
+
+        ostringstream oss;
+        oss << put_time(tm_now, "%Y-%m-%d");
+        date_key = oss.str();
         
-        auto it = daily_data.find(date_key);
-        if (it == daily_data.end() || it->second.empty()) {
+        auto it = daily_calc_buffer.find(date_key);
+        if (it == daily_calc_buffer.end() || it->second.empty()) {
             return;
         }
         
@@ -266,23 +359,20 @@ private:
         }
         float avg_temp = sum / it->second.size();
         
-        // Записываем в файл
-        lock_guard<mutex> file_lock(file_mutex);
-        
-        ofstream out_file(daily_log_file, ios::app);
-        if (out_file.is_open()) {
-            stringstream ss;
-            ss << fixed << setprecision(2);
-            ss << avg_temp;
-            out_file << date_key << "," << ss.str() << endl;
-            out_file.close();
-        }
-
+        // Сохраняем результат (дозапись в конец файла)
+        append_daily_average(date_key, avg_temp);
         
         // Удаляем обработанные данные
-        daily_data.erase(it);
+        daily_calc_buffer.erase(it);
         
-        cout << "Daily average calculated\n";
+        // Периодически проверяем необходимость очистки
+        static size_t cleanup_counter = 0;
+        if (++cleanup_counter >= CLEANUP_CHECK_INTERVAL) {
+            cleanup_counter = 0;
+            if (needs_daily_cleanup) {
+                cleanup_daily_log();
+            }
+        }
     }
     
 public:
@@ -290,28 +380,52 @@ public:
         : raw_log_file(raw_log), hourly_log_file(hourly_log), daily_log_file(daily_log) {
         last_hour_check = time(nullptr);
         last_day_check = time(nullptr);
+        
+        // Подсчитываем количество записей в файлах при старте
+        raw_records_count = count_file_lines(raw_log_file);
+        hourly_records_count = count_file_lines(hourly_log_file);
+        daily_records_count = count_file_lines(daily_log_file);
+        
+        // Устанавливаем флаги очистки если нужно
+        if (raw_records_count > MAX_RAW_RECORDS) needs_raw_cleanup = true;
+        if (hourly_records_count > MAX_HOURLY_RECORDS) needs_hourly_cleanup = true;
+        if (daily_records_count > MAX_DAILY_RECORDS) needs_daily_cleanup = true;
+        
+        // Делаем очистку если нужно
+        if (needs_raw_cleanup) cleanup_raw_log();
+        if (needs_hourly_cleanup) cleanup_hourly_log();
+        if (needs_daily_cleanup) cleanup_daily_log();
+
     }
     
     void add_data(const TemperatureData& data) {
+        append_raw_log(data);
+        
         lock_guard<mutex> lock(data_mutex);
-        hourly_data.push_back(data);
+        hourly_calc_buffer.push_back(data);
         
         // Добавляем в дневные данные
-        string date_key = data.timestamp.substr(0, 10); // YYYY-MM-DD
-        daily_data[date_key].push_back(data.temperature);
-        
-        // Записываем в raw лог
-        write_raw_log(data);
+        string date_key = data.timestamp.substr(0, 10); 
+        daily_calc_buffer[date_key].push_back(data.temperature);
+
+        // Периодически проверяем необходимость очистки лога
+        static size_t raw_cleanup_counter = 0;
+        if (++raw_cleanup_counter >= CLEANUP_CHECK_INTERVAL) {
+            raw_cleanup_counter = 0;
+            if (needs_raw_cleanup) {
+                cleanup_raw_log();
+            }
+        }
         
         // Проверяем, не прошел ли час
         time_t current_time = time(nullptr);
-        if (difftime(current_time, last_hour_check) >= 3600) {
+        if (difftime(current_time, last_hour_check) >= 60 * 60) {
             process_hourly_average();
             last_hour_check = current_time;
         }
         
         // Проверяем, не прошел ли день
-        if (difftime(current_time, last_day_check) >= 86400) {
+        if (difftime(current_time, last_day_check) >= 24 * 60 * 60) {
             process_daily_average();
             last_day_check = current_time;
         }
@@ -319,28 +433,16 @@ public:
     
     void cleanup() {
         // При завершении программы обрабатываем оставшиеся данные
-        if (!hourly_data.empty()) {
-            process_hourly_average();
-        }
+        process_hourly_average();
+        process_daily_average();
         
-        // Обрабатываем данные за вчерашний день
-        tm* tm_now = localtime(&last_day_check);
-        tm_now->tm_mday -= 1;
-        mktime(tm_now);
-        
-        string date_key;
-        ostringstream oss;
-        oss << put_time(tm_now, "%Y-%m-%d");
-        date_key = oss.str();
-        
-        lock_guard<mutex> lock(data_mutex);
-        auto it = daily_data.find(date_key);
-        if (it != daily_data.end() && !it->second.empty()) {
-            daily_data.erase(it); // Очищаем старые данные
-        }
+        // Финальная очистка если нужно
+        if (needs_raw_cleanup) cleanup_raw_log();
+        if (needs_hourly_cleanup) cleanup_hourly_log();
+        if (needs_daily_cleanup) cleanup_daily_log();
     }
     
-    // Публичный метод для парсинга JSON
+    // Парсер джейсончика
     bool parse_and_add_data(const string& json_str) {
         TemperatureData data;
         if (parse_json(json_str, data)) {
