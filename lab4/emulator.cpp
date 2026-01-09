@@ -27,7 +27,7 @@ void signal_handler(int signal) {
 // Глобальная переменная для последней температуры
 float last_temp = 20.0f;
 
-// Генератор случайных значений температуры
+// Гипер реалистичная генерация - все тз
 float generate_temperature() {
     float change = (rand() % 100 - 50) / 100.0f;
     last_temp += change;
