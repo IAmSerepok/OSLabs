@@ -45,4 +45,6 @@
 
 **/output/
 
+**/venv/
+
 .vscode/

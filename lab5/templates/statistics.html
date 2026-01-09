@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature Statistics</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .nav a {
+            padding: 10px 20px;
+            background: #0066cc;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .nav a:hover {
+            background: #0055aa;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .stat-box {
+            text-align: center;
+            padding: 25px 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+        tr:hover {
+            background: #f9f9f9;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input[type="datetime-local"] {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 100%;
+            max-width: 300px;
+        }
+        .form-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background: #0055aa;
+        }
+        .time-range-info {
+            background: #f0f7ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/statistics">Statistics</a>
+        </div>
+        
+        <div class="card">
+            <h2>Select Time Range</h2>
+            <form method="get" action="/statistics">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="start">Start Time:</label>
+                        <input type="datetime-local" id="start" name="start" 
+                               value="{{ start_time.replace(' ', 'T') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end">End Time:</label>
+                        <input type="datetime-local" id="end" name="end" 
+                               value="{{ end_time.replace(' ', 'T') }}" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn">Update Statistics</button>
+            </form>
+        </div>
+        
+        {% if stats %}
+        <div class="card">
+            <h2>Temperature Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-value">{{ "%.2f"|format(stats.average) }}°C</div>
+                    <div class="stat-label">AVERAGE</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">{{ "%.2f"|format(stats.min) }}°C</div>
+                    <div class="stat-label">MINIMUM</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">{{ "%.2f"|format(stats.max) }}°C</div>
+                    <div class="stat-label">MAXIMUM</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if hourly_graph %}
+        <div class="card">
+            <h2>Hourly Averages</h2>
+            <div id="hourly-graph"></div>
+        </div>
+        {% endif %}
+        
+        <div class="card">
+            <h2>Latest Temperature Readings</h2>
+            {% if raw_data and raw_data|length > 0 %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Temperature (°C)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reading in raw_data %}
+                    <tr>
+                        <td>{{ reading.timestamp }}</td>
+                        <td>{{ "%.2f"|format(reading.temperature) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="text-align: center; color: #999; padding: 40px;">
+                No data available for selected time range
+            </p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script>
+        {% if hourly_graph %}
+        var hourlyData = JSON.parse('{{ hourly_graph|safe }}');
+        Plotly.newPlot('hourly-graph', hourlyData.data, hourlyData.layout);
+        {% endif %}
+        
+        var now = new Date();
+        var endInput = document.getElementById('end');
+        var startInput = document.getElementById('start');
+        
+        var formatDate = function(date) {
+            return date.toISOString().slice(0, 16);
+        };
+
+        endInput.max = formatDate(now);
+
+        if (!endInput.value) {
+            endInput.value = formatDate(now);
+        }
+        if (!startInput.value) {
+            var yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startInput.value = formatDate(yesterday);
+        }
+    </script>
+</body>
+</html>

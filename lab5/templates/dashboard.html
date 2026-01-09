@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temperature Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .current-temp {
+            font-size: 48px;
+            font-weight: bold;
+            color: #0066cc;
+            margin: 10px 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .nav a {
+            padding: 10px 20px;
+            background: #0066cc;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .nav a:hover {
+            background: #0055aa;
+        }
+        .time-range {
+            background: #f0f7ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/statistics">Statistics</a>
+        </div>
+        
+        <div class="header">
+            <div class="current-temp">{{ "%.2f"|format(current_temp) }}°C</div>
+            <div style="color: #666;">Current Temperature</div>
+        </div>
+        
+        <div class="grid">
+            <div class="card">
+                <h2>Temperature History</h2>
+                <div id="history-graph"></div>
+            </div>
+            
+            <div class="card">
+                <h2>Latest Readings</h2>
+                {% if raw_data and raw_data|length > 0 %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Temperature (°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reading in raw_data %}
+                        <tr>
+                            <td>{{ reading.timestamp }}</td>
+                            <td>{{ "%.2f"|format(reading.temperature) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="text-align: center; color: #999; padding: 40px;">
+                    No data available
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if stats %}
+        <div class="card" style="margin-top: 20px;">
+            <h2>Statistics (24h)</h2>
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value">{{ "%.2f"|format(stats.average) }}°C</div>
+                    <div class="stat-label">Average</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ "%.2f"|format(stats.min) }}°C</div>
+                    <div class="stat-label">Minimum</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ "%.2f"|format(stats.max) }}°C</div>
+                    <div class="stat-label">Maximum</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ stats.samples }}</div>
+                    <div class="stat-label">Samples</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <script>
+        {% if history_graph %}
+        var graphData = JSON.parse('{{ history_graph|safe }}');
+        Plotly.newPlot('history-graph', graphData.data, graphData.layout);
+        {% endif %}
+
+        setTimeout(function() {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>
