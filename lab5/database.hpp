@@ -9,6 +9,7 @@
 #include <iostream>
 #include <iomanip>
 #include <ctime>
+
 #include "sqlite3.h"
 
 class Database {
@@ -100,6 +101,7 @@ public:
         return true;
     }
     
+    // Таблички
     void createTables() {
         execute(R"(
             CREATE TABLE IF NOT EXISTS temperature_raw (
@@ -137,6 +139,7 @@ public:
         )");
     }
     
+    // Вставки
     bool insertRawData(const TemperatureRecord& record) {
         std::lock_guard<std::mutex> lock(db_mutex);
         
@@ -232,6 +235,7 @@ public:
         return result;
     }
     
+    // Селекты
     std::vector<Database::TemperatureRecord> getRawData(const std::string& start_time, 
                                                         const std::string& end_time, 
                                                         int limit = 1000) {
@@ -398,6 +402,7 @@ public:
         return stats;
     }
     
+    // Очистка
     bool cleanupOldData(int keep_days = 30) {
         std::lock_guard<std::mutex> lock(db_mutex);
         

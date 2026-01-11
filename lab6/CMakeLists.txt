@@ -1,3 +1,5 @@
+# Собираем только оконное, а сервер с эмулятором в lab5
+
 cmake_minimum_required(VERSION 3.16)
 project(TemperatureMonitorGUI)
 

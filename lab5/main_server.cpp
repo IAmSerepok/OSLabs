@@ -1,9 +1,11 @@
 #include "temperature_logger.hpp"
 #include "httpserver.hpp"
+
 #include <iostream>
 #include <csignal>
 #include <atomic>
 #include <thread>
+
 
 std::atomic<bool> running(true);
 TemperatureLogger* logger = nullptr;

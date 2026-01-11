@@ -1,6 +1,8 @@
 #include "temperature_monitor_gui.h"
+
 #include <QGridLayout>
 #include <QMessageBox>
+
 
 #if defined(QT_CHARTS_LIB)
     #if QT_VERSION_MAJOR == 6
@@ -14,6 +16,7 @@
         QT_CHARTS_USE_NAMESPACE
     #endif
 #endif
+
 
 TemperatureMonitorGUI::TemperatureMonitorGUI(QWidget *parent)
     : QMainWindow(parent)
@@ -118,9 +121,8 @@ void TemperatureMonitorGUI::setupUI() {
     QGroupBox *chartGroup = new QGroupBox("График температуры");
     chartGroup->setStyleSheet("QGroupBox { font-weight: bold; }");
     QVBoxLayout *chartLayout = new QVBoxLayout(chartGroup);
-    chartLayout->setContentsMargins(5, 20, 5, 5); // Уменьшаем отступы
+    chartLayout->setContentsMargins(5, 20, 5, 5); 
     
-    // Устанавливаем растяжение для группы графика
     mainLayout->addWidget(chartGroup, 1);
     
     // Таймер
@@ -141,88 +143,89 @@ void TemperatureMonitorGUI::setupConnections() {
 void TemperatureMonitorGUI::setupCharts() {
     // Создаем график только если Charts доступен
     #ifdef QT_CHARTS_LIB
-    temperatureChart = new QChart();
-    temperatureChart->setTitle("Изменение температуры");
-    
-    // Установка темы для навый кьюти
-    #if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
-        temperatureChart->setTheme(QChart::ChartThemeDark);
-    #endif
-    
-    temperatureChart->legend()->setVisible(true);
-    temperatureChart->legend()->setAlignment(Qt::AlignBottom);
-    
-    chartView = new QChartView(temperatureChart);
-    chartView->setRenderHint(QPainter::Antialiasing);
-    
-    // Настройка размеров
-    chartView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    chartView->setMinimumHeight(400); 
-    
-    // Ищем группу графика по имени
-    QGroupBox *chartGroup = nullptr;
-    QList<QGroupBox*> groups = findChildren<QGroupBox*>();
-    for (QGroupBox *group : groups) {
-        if (group->title() == "График температуры") {
-            chartGroup = group;
-            break;
-        }
-    }
-    
-    if (chartGroup && chartGroup->layout()) {
-        // Очищаем 
-        QLayoutItem* item;
-        while ((item = chartGroup->layout()->takeAt(0)) != nullptr) {
-            delete item->widget();
-            delete item;
+        temperatureChart = new QChart();
+        temperatureChart->setTitle("Изменение температуры");
+        
+        // Установка темы для новых версий кьюти
+        #if QT_VERSION >= QT_VERSION_CHECK(5, 7, 0)
+            temperatureChart->setTheme(QChart::ChartThemeDark);
+        #endif
+        
+        temperatureChart->legend()->setVisible(true);
+        temperatureChart->legend()->setAlignment(Qt::AlignBottom);
+        
+        chartView = new QChartView(temperatureChart);
+        chartView->setRenderHint(QPainter::Antialiasing);
+        
+        // Настройка размеров
+        chartView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        chartView->setMinimumHeight(400); 
+        
+        // Ищем группу графика по имени
+        QGroupBox *chartGroup = nullptr;
+        QList<QGroupBox*> groups = findChildren<QGroupBox*>();
+        for (QGroupBox *group : groups) {
+            if (group->title() == "График температуры") {
+                chartGroup = group;
+                break;
+            }
         }
         
-        chartGroup->layout()->addWidget(chartView);
-    }
-    
-    temperatureSeries = new QLineSeries();
-    temperatureSeries->setName("Температура");
-    temperatureSeries->setColor(QColor(79, 195, 247));
-    temperatureSeries->setPen(QPen(QColor(79, 195, 247), 2));
-    temperatureSeries->setPointsVisible(true);
-    
-    avgSeries = new QLineSeries();
-    avgSeries->setName("Средняя");
-    avgSeries->setColor(QColor(255, 193, 7));
-    avgSeries->setPen(QPen(QColor(255, 193, 7), 2, Qt::DashLine));
-    
-    temperatureChart->addSeries(temperatureSeries);
-    temperatureChart->addSeries(avgSeries);
-    
-    // ООХ
-    QDateTimeAxis *axisX = new QDateTimeAxis();
-    axisX->setTitleText("Время");
-    axisX->setFormat("dd.MM HH:mm");
-    axisX->setTickCount(10);
-    axisX->setLabelsAngle(-45);
-    axisX->setGridLineVisible(true);
-    axisX->setGridLineColor(QColor(100, 100, 100, 100));
-    temperatureChart->addAxis(axisX, Qt::AlignBottom);
-    temperatureSeries->attachAxis(axisX);
-    avgSeries->attachAxis(axisX);
-    
-    // ОУ
-    QValueAxis *axisY = new QValueAxis();
-    axisY->setTitleText("Температура, °C");
-    axisY->setLabelFormat("%.1f");
-    axisY->setRange(-20, 40);
-    axisY->setTickCount(13);
-    axisY->setGridLineVisible(true);
-    axisY->setGridLineColor(QColor(100, 100, 100, 100));
-    temperatureChart->addAxis(axisY, Qt::AlignLeft);
-    temperatureSeries->attachAxis(axisY);
-    avgSeries->attachAxis(axisY);
-    
-    // отступы
-    temperatureChart->setMargins(QMargins(10, 10, 10, 10));
+        if (chartGroup && chartGroup->layout()) {
+            // Очищаем 
+            QLayoutItem* item;
+            while ((item = chartGroup->layout()->takeAt(0)) != nullptr) {
+                delete item->widget();
+                delete item;
+            }
+            
+            chartGroup->layout()->addWidget(chartView);
+        }
+        
+        temperatureSeries = new QLineSeries();
+        temperatureSeries->setName("Температура");
+        temperatureSeries->setColor(QColor(79, 195, 247));
+        temperatureSeries->setPen(QPen(QColor(79, 195, 247), 2));
+        temperatureSeries->setPointsVisible(true);
+        
+        avgSeries = new QLineSeries();
+        avgSeries->setName("Средняя");
+        avgSeries->setColor(QColor(255, 193, 7));
+        avgSeries->setPen(QPen(QColor(255, 193, 7), 2, Qt::DashLine));
+        
+        temperatureChart->addSeries(temperatureSeries);
+        temperatureChart->addSeries(avgSeries);
+        
+        // ОХ
+        QDateTimeAxis *axisX = new QDateTimeAxis();
+        axisX->setTitleText("Время");
+        axisX->setFormat("dd.MM HH:mm");
+        axisX->setTickCount(10);
+        axisX->setLabelsAngle(-45);
+        axisX->setGridLineVisible(true);
+        axisX->setGridLineColor(QColor(100, 100, 100, 100));
+        temperatureChart->addAxis(axisX, Qt::AlignBottom);
+        temperatureSeries->attachAxis(axisX);
+        avgSeries->attachAxis(axisX);
+        
+        // ОУ
+        QValueAxis *axisY = new QValueAxis();
+        axisY->setTitleText("Температура, °C");
+        axisY->setLabelFormat("%.1f");
+        axisY->setRange(-20, 40);
+        axisY->setTickCount(13);
+        axisY->setGridLineVisible(true);
+        axisY->setGridLineColor(QColor(100, 100, 100, 100));
+        temperatureChart->addAxis(axisY, Qt::AlignLeft);
+        temperatureSeries->attachAxis(axisY);
+        avgSeries->attachAxis(axisY);
+        
+        // отступы
+        temperatureChart->setMargins(QMargins(10, 10, 10, 10));
     #endif
 }
 
+// Запросы к апи
 void TemperatureMonitorGUI::updateCurrentTemperature() {
     QUrl url(serverUrl + "/api/current");
     QNetworkRequest request(url);
@@ -332,33 +335,33 @@ void TemperatureMonitorGUI::parseHistoryData(const QJsonArray& array) {
     avgTempLabel->setText(QString("Средняя температура: %1").arg(formatTemperature(avgTemp)));
     
     #ifdef QT_CHARTS_LIB
-    // Добавляем линию среднего значения
-    if (temperatureSeries && avgSeries && temperatureSeries->count() > 0) {
-        double firstX = temperatureSeries->at(0).x();
-        double lastX = temperatureSeries->at(temperatureSeries->count()-1).x();
-        
-        avgSeries->append(firstX, avgTemp);
-        avgSeries->append(lastX, avgTemp);
-    }
-    
-    // Обновляем оси графика
-    if (temperatureChart && minTime.isValid() && maxTime.isValid()) {
-        QList<QAbstractAxis*> axes = temperatureChart->axes(Qt::Horizontal);
-        if (!axes.isEmpty()) {
-            QDateTimeAxis *axisX = qobject_cast<QDateTimeAxis*>(axes.first());
-            if (axisX) {
-                axisX->setRange(minTime, maxTime);
-            }
+        // Добавляем линию среднего значения
+        if (temperatureSeries && avgSeries && temperatureSeries->count() > 0) {
+            double firstX = temperatureSeries->at(0).x();
+            double lastX = temperatureSeries->at(temperatureSeries->count()-1).x();
+            
+            avgSeries->append(firstX, avgTemp);
+            avgSeries->append(lastX, avgTemp);
         }
         
-        axes = temperatureChart->axes(Qt::Vertical);
-        if (!axes.isEmpty()) {
-            QValueAxis *axisY = qobject_cast<QValueAxis*>(axes.first());
-            if (axisY) {
-                axisY->setRange(-20, 40);
+        // Обновляем оси графика
+        if (temperatureChart && minTime.isValid() && maxTime.isValid()) {
+            QList<QAbstractAxis*> axes = temperatureChart->axes(Qt::Horizontal);
+            if (!axes.isEmpty()) {
+                QDateTimeAxis *axisX = qobject_cast<QDateTimeAxis*>(axes.first());
+                if (axisX) {
+                    axisX->setRange(minTime, maxTime);
+                }
+            }
+            
+            axes = temperatureChart->axes(Qt::Vertical);
+            if (!axes.isEmpty()) {
+                QValueAxis *axisY = qobject_cast<QValueAxis*>(axes.first());
+                if (axisY) {
+                    axisY->setRange(-20, 40);
+                }
             }
         }
-    }
     #endif
 }
 

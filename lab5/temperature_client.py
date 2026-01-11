@@ -1,17 +1,21 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for
 import requests
 import json
-from datetime import datetime, timedelta
-import plotly.graph_objects as go
 import plotly.utils
 import threading
 import time
+
+from flask import Flask, render_template, jsonify, request, redirect, url_for
+from datetime import datetime, timedelta
+
+import plotly.graph_objects as go
+
 
 app = Flask(__name__)
 
 # Конфигурация сервера
 SERVER_URL = "http://localhost:8080"
 UPDATE_INTERVAL = 5
+
 
 class TemperatureClient:
     def __init__(self, server_url):
@@ -99,18 +103,22 @@ class TemperatureClient:
 
 client = TemperatureClient(SERVER_URL)
 
+
 def background_updater():
     while True:
         client.update_history()
         time.sleep(UPDATE_INTERVAL)
 
+
 # Запускаем фоновый поток
 updater_thread = threading.Thread(target=background_updater, daemon=True)
 updater_thread.start()
 
+
 @app.route('/')
 def index():
     return redirect(url_for('dashboard'))
+
 
 @app.route('/dashboard')
 def dashboard():
@@ -167,6 +175,7 @@ def dashboard():
                          history=history[-10:],
                          start_time=start_str,
                          end_time=end_str)
+
 
 @app.route('/statistics')
 def statistics():
@@ -233,6 +242,7 @@ def statistics():
                          start_time=start_param,
                          end_time=end_param)
 
+
 @app.route('/api/current')
 def api_current():
     with client.lock:
@@ -241,10 +251,12 @@ def api_current():
             'timestamp': datetime.now().isoformat()
         })
 
+
 @app.route('/api/history')
 def api_history():
     with client.lock:
         return jsonify(client.history)
+
 
 @app.route('/api/statistics')
 def api_statistics():
@@ -262,6 +274,7 @@ def api_statistics():
             return jsonify({'error': 'Failed to fetch statistics'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/raw')
 def api_raw():
@@ -286,6 +299,7 @@ def api_raw():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/hourly')
 def api_hourly():
     try:
@@ -302,6 +316,7 @@ def api_hourly():
             return jsonify({'error': 'Failed to fetch hourly data'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

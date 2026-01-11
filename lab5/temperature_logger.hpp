@@ -3,6 +3,7 @@
 
 #include "database.hpp"
 #include "my_serial.hpp"
+
 #include <string>
 #include <vector>
 #include <map>
@@ -15,6 +16,7 @@
 #include <iomanip>
 #include <cmath>
 #include <ctime>
+
 
 class TemperatureLogger {
 private:
@@ -33,6 +35,7 @@ private:
     time_t last_day_check;
     time_t last_cleanup_check;
     
+    // Парсим джейсон
     bool parse_json(const std::string& json_str, Database::TemperatureRecord& record) {
         size_t temp_pos = json_str.find("\"temperature\":");
         size_t checksum_pos = json_str.find("\"checksum\":");
@@ -48,6 +51,7 @@ private:
                 return false;
             }
             
+            // Смешаем позицию
             temp_pos += 7;
             checksum_pos += 7;
             time_pos += 7;
@@ -81,6 +85,7 @@ private:
             return false;
         }
         
+        // Проверка корректности данных
         const double EPSILON = 0.01;
         if (std::fabs(temperature - checksum) > EPSILON) {
             std::cerr << "Checksum error\n";
@@ -268,6 +273,7 @@ public:
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
                 
+                // Проверка актуальности данных
                 time_t current_time = time(nullptr);
                 
                 if (difftime(current_time, last_hour_check) >= 60 * 60) {
